@@ -1,0 +1,133 @@
+<?php
+/**
+ * Filter options: checkbox-style toggles for attributes (several per attribute), a slider
+ * for price, a search box and "show more" for long lists. Replaces Hyvä's
+ * Magento_LayeredNavigation::layer/filter.phtml through layout, for every theme.
+ */
+
+declare(strict_types=1);
+
+use Hyva\Theme\Model\LocaleFormatter;
+use Hyva\Theme\Model\ViewModelRegistry;
+use Kkkonrad\LayeredNavigation\Model\Attribute;
+use Kkkonrad\LayeredNavigation\Model\Facets;
+use Magento\Catalog\Helper\Data;
+use Magento\CatalogSearch\Model\Layer\Filter\Price;
+use Magento\Framework\Escaper;
+use Magento\LayeredNavigation\Block\Navigation\FilterRenderer;
+
+// phpcs:disable Magento2.Templates.ThisInTemplate.FoundHelper
+
+/** @var FilterRenderer $block */
+/** @var Escaper $escaper */
+/** @var LocaleFormatter $localeFormatter */
+/** @var ViewModelRegistry $viewModels */
+/** @var array $filterItems */
+
+$visibleCount = 8;
+$showCount = $this->helper(Data::class)->shouldDisplayProductCountOnLayer();
+$filter = $filterItems ? reset($filterItems)->getFilter() : null;
+
+if ($filter instanceof Price) {
+    [$min, $max] = $viewModels->require(Facets::class)->priceBounds($filter->getLayer());
+    [$from, $to] = array_pad(explode('-', (string)$block->getRequest()->getParam('price')), 2, '');
+    $from = max($min, min($max, (int)$from ?: $min));
+    $to = max($from, min($max, (int)$to ?: $max));
+}
+?>
+<?php if ($filter instanceof Price && $max > $min): ?>
+    <div
+        class="kk-ln-price"
+        x-data="{
+            min: <?= (int)$min ?>, max: <?= (int)$max ?>, from: <?= (int)$from ?>, to: <?= (int)$to ?>,
+            apply() {
+                this.from = Math.max(this.min, Math.min(this.from, this.to));
+                this.to = Math.min(this.max, Math.max(this.to, this.from));
+                const url = new URL(this.$refs.go.dataset.base);
+                url.searchParams.delete('p');
+                if (this.from > this.min || this.to < this.max) {
+                    url.searchParams.set('price', (this.from > this.min ? this.from : '') + '-' + (this.to < this.max ? this.to : ''));
+                } else {
+                    url.searchParams.delete('price');
+                }
+                this.$refs.go.href = url.toString().replace(/%2C/g, ',');
+                this.$refs.go.click();
+            }
+        }"
+        style="--kk-from: <?= ($from - $min) / ($max - $min) * 100 ?>%; --kk-to: <?= ($to - $min) / ($max - $min) * 100 ?>%"
+        :style="{ '--kk-from': (from - min) / (max - min) * 100 + '%', '--kk-to': (to - min) / (max - min) * 100 + '%' }"
+    >
+        <div class="kk-ln-price__track">
+            <input type="range" min="<?= (int)$min ?>" max="<?= (int)$max ?>" value="<?= (int)$from ?>"
+                   x-model.number="from" @input="from = Math.min(from, to)" @change="apply()"
+                   aria-label="<?= $escaper->escapeHtmlAttr(__('Minimum price')) ?>">
+            <input type="range" min="<?= (int)$min ?>" max="<?= (int)$max ?>" value="<?= (int)$to ?>"
+                   x-model.number="to" @input="to = Math.max(to, from)" @change="apply()"
+                   aria-label="<?= $escaper->escapeHtmlAttr(__('Maximum price')) ?>">
+        </div>
+        <div class="kk-ln-price__inputs">
+            <input type="number" class="form-input" min="<?= (int)$min ?>" max="<?= (int)$max ?>"
+                   value="<?= (int)$from ?>" x-model.number="from" @change="apply()"
+                   aria-label="<?= $escaper->escapeHtmlAttr(__('Minimum price')) ?>">
+            <span aria-hidden="true">&ndash;</span>
+            <input type="number" class="form-input" min="<?= (int)$min ?>" max="<?= (int)$max ?>"
+                   value="<?= (int)$to ?>" x-model.number="to" @change="apply()"
+                   aria-label="<?= $escaper->escapeHtmlAttr(__('Maximum price')) ?>">
+        </div>
+        <a hidden x-ref="go" data-base="<?= $escaper->escapeHtmlAttr(reset($filterItems)->getUrl()) ?>"></a>
+    </div>
+<?php else: ?>
+    <?php $long = count($filterItems) > $visibleCount; ?>
+    <div x-data="{ q: '', more: false }">
+        <?php if ($long): ?>
+            <input type="search" class="form-input kk-ln-search" x-model="q"
+                   placeholder="<?= $escaper->escapeHtmlAttr(__('Search %1', $block->getFilterTitle())) ?>"
+                   aria-label="<?= $escaper->escapeHtmlAttr(__('Search %1', $block->getFilterTitle())) ?>">
+        <?php endif; ?>
+        <ol role="list" class="items" aria-label="<?= $escaper->escapeHtmlAttr(__('%1 filter options', $block->getFilterTitle())) ?>">
+        <?php foreach (array_values($filterItems) as $i => $filterItem): ?>
+            <?php
+            $label = strip_tags((string)$filterItem->getLabel());
+            $isToggle = $filter instanceof Attribute;
+            $selected = (bool)$filterItem->getSelected();
+            ?>
+            <li
+                <?php if ($long): ?>
+                    data-label="<?= $escaper->escapeHtmlAttr(mb_strtolower($label)) ?>"
+                    x-show="q ? $el.dataset.label.includes(q.toLowerCase()) : (more || <?= $i < $visibleCount || $selected ? 'true' : 'false' ?>)"
+                    <?= $i < $visibleCount || $selected ? '' : 'x-cloak' ?>
+                <?php endif; ?>
+            >
+                <?php if ($filterItem->getCount() > 0 || $selected): ?>
+                    <a
+                        href="<?= $escaper->escapeUrl($filterItem->getUrl()) ?>"
+                        rel="nofollow"
+                        class="flex justify-between py-1 hover:text-black<?= $isToggle ? ' kk-ln-option' : '' ?>"
+                        <?php if ($isToggle): ?>
+                            role="checkbox" aria-checked="<?= $selected ? 'true' : 'false' ?>"
+                        <?php endif; ?>
+                        aria-label="<?= $escaper->escapeHtmlAttr(__('%1 filter, %2 available products', $label, $filterItem->getCount())) ?>"
+                    >
+                        <span><?= /* @noEscape */ $filterItem->getLabel() ?></span>
+                        <?php if ($showCount): ?>
+                            <span class="count">(<?= /* @noEscape */ $localeFormatter->formatNumber((int)$filterItem->getCount()) ?>)</span>
+                        <?php endif; ?>
+                    </a>
+                <?php else: ?>
+                    <span class="flex justify-between py-1 opacity-50<?= $isToggle ? ' kk-ln-option' : '' ?>">
+                        <span><?= /* @noEscape */ $filterItem->getLabel() ?></span>
+                        <?php if ($showCount): ?>
+                            <span class="count">(0)</span>
+                        <?php endif; ?>
+                    </span>
+                <?php endif; ?>
+            </li>
+        <?php endforeach ?>
+        </ol>
+        <?php if ($long): ?>
+            <button type="button" class="kk-ln-more" x-show="!q" x-cloak @click="more = !more"
+                    x-text="more ? '<?= $escaper->escapeJs(__('Show less')) ?>' : '<?= $escaper->escapeJs(__('Show more')) ?>'"
+            ><?= $escaper->escapeHtml(__('Show more')) ?></button>
+        <?php endif; ?>
+    </div>
+<?php endif; ?>

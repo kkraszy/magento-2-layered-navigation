@@ -1,0 +1,77 @@
+<?php
+/**
+ * Filters and paging without a page reload: fetch the link's page (served from full page
+ * cache like any other) and swap `#maincontent .columns`, which holds the filters, toolbar,
+ * product list and pager. Links in the sidebar or pager that stay on this path are taken
+ * over; anything else navigates normally, as does every link when this script fails.
+ */
+
+declare(strict_types=1);
+
+use Hyva\Theme\Model\ViewModelRegistry;
+use Hyva\Theme\ViewModel\HyvaCsp;
+
+/** @var ViewModelRegistry $viewModels */
+/** @var HyvaCsp $hyvaCsp */
+?>
+<script>
+(() => {
+    const columns = () => document.querySelector('#maincontent .columns');
+    const handled = (a) => a && a.href && !a.target && a.origin === location.origin
+        && a.pathname === location.pathname && a.closest('.sidebar-main, .pages')
+        && a.closest('#maincontent .columns');
+
+    async function load(url, push, scroll) {
+        const old = columns();
+        old.setAttribute('aria-busy', 'true');
+        old.style.opacity = '.5';
+        try {
+            const res = await fetch(url, { credentials: 'same-origin' });
+            const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
+            const parsed = doc.querySelector('#maincontent .columns');
+            if (!res.ok || !parsed) throw new Error(res.status);
+
+            // Parsed scripts never run. Fresh copies do, on insertion - but only if made while
+            // the tree is detached and owned by this document, hence importNode first.
+            // Toolbars define uniquely named init functions inline that Alpine needs.
+            const fresh = document.importNode(parsed, true);
+            fresh.querySelectorAll('script').forEach((s) => {
+                const copy = document.createElement('script');
+                [...s.attributes].forEach((a) => copy.setAttribute(a.name, a.value));
+                copy.textContent = s.textContent;
+                s.replaceWith(copy);
+            });
+            // Keep the accordions the shopper had open, and the mobile filter panel.
+            const open = new Set([...old.querySelectorAll('details[open] > summary')].map((s) => s.textContent.trim()));
+            fresh.querySelectorAll('details > summary').forEach((s) => {
+                if (open.has(s.textContent.trim())) s.parentElement.open = true;
+            });
+            const panel = old.querySelector('[x-data="initLayeredNavigation"]');
+            const panelOpen = panel && window.Alpine && Alpine.$data(panel).blockOpen;
+
+            if (push) history.pushState({ kkLayeredNav: true }, '', url);
+            old.replaceWith(fresh);
+            document.title = doc.title || document.title;
+            if (panelOpen) {
+                requestAnimationFrame(() => {
+                    const p = columns().querySelector('[x-data="initLayeredNavigation"]');
+                    if (p) Alpine.$data(p).blockOpen = true;
+                });
+            }
+            if (scroll) document.getElementById('product-list')?.scrollIntoView({ behavior: 'smooth' });
+        } catch (e) {
+            location.assign(url);
+        }
+    }
+
+    document.addEventListener('click', (e) => {
+        const a = e.target.closest('a');
+        if (e.defaultPrevented || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || !handled(a)) return;
+        if (a.getAttribute('href').startsWith('#') || a.href === location.href.split('#')[0] && !a.search) return;
+        e.preventDefault();
+        load(a.href, true, !!a.closest('.pages'));
+    });
+    window.addEventListener('popstate', () => columns() && load(location.href, false, false));
+})();
+</script>
+<?php $hyvaCsp->registerInlineScript() ?>

@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="urn:magento:framework:ObjectManager/etc/config.xsd">
+    <preference for="Magento\CatalogSearch\Model\Layer\Filter\Attribute"
+                type="Kkkonrad\LayeredNavigation\Model\Attribute"/>
+
+    <!-- Facets records how each layer collection was built, so it can rebuild one minus a filter -->
+    <type name="Magento\Catalog\Model\Layer\ItemCollectionProviderInterface">
+        <plugin name="kkkonrad_layerednav" type="Kkkonrad\LayeredNavigation\Model\Facets"/>
+    </type>
+    <type name="Magento\CatalogSearch\Model\Search\ItemCollectionProviderInterface">
+        <plugin name="kkkonrad_layerednav" type="Kkkonrad\LayeredNavigation\Model\Facets"/>
+    </type>
+    <type name="Magento\CatalogSearch\Model\ResourceModel\Fulltext\Collection">
+        <plugin name="kkkonrad_layerednav" type="Kkkonrad\LayeredNavigation\Model\Facets"/>
+    </type>
+
+    <type name="Magento\Catalog\Model\Layer\Filter\Item">
+        <plugin name="kkkonrad_layerednav" type="Kkkonrad\LayeredNavigation\Plugin\Urls"/>
+    </type>
+    <type name="Magento\LayeredNavigation\Block\Navigation\FilterRenderer">
+        <plugin name="kkkonrad_layerednav" type="Kkkonrad\LayeredNavigation\Plugin\Urls"/>
+    </type>
+    <type name="Magento\Swatches\Block\LayeredNavigation\RenderLayered">
+        <plugin name="kkkonrad_layerednav" type="Kkkonrad\LayeredNavigation\Plugin\Urls"/>
+    </type>
+</config>
