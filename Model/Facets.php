@@ -14,7 +14,7 @@ use Magento\Framework\View\Element\Block\ArgumentInterface;
  * would leave "Red" as the only colour on offer. OpenSearch cannot drop one filter from a
  * built request, so this records how the layer collection was made (plugins on the provider
  * and on addFieldToFilter) and builds a second collection with that one field left out.
- * One extra search per active attribute - the same trade-off Amasty makes.
+ * One extra search per active attribute - the usual trade-off for multi-select facets.
  */
 class Facets implements ArgumentInterface
 {

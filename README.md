@@ -1,7 +1,6 @@
 # Kkkonrad_LayeredNavigation
 
-Improved layered navigation for Hyvä (in the spirit of Amasty Improved Layered
-Navigation). Category and search result pages, every theme, no template override
+Improved layered navigation for Hyvä. Category and search result pages, every theme, no template override
 needed in the theme.
 
 - **Several options per attribute:** `?color=49,50` = black **or** blue; different
